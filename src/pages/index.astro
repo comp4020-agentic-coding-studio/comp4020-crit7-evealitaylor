@@ -1,6 +1,6 @@
 ---
 import Shell from "../layouts/Shell.astro";
-import { freeDaysFor, listSubjects, planFor, skipsLectures } from "../lib/db";
+import { freeDaysFor, listSubjects, planFor, recordedLecturesFor } from "../lib/db";
 import {
   buildTimetable,
   className,
@@ -9,7 +9,6 @@ import {
   DAY_START,
   DAYS,
   hhmm,
-  isLecture,
   suggestPlan,
 } from "../lib/timetable";
 
@@ -20,20 +19,19 @@ import {
 const plan = planFor(Astro.locals.studentId);
 const freeDays = freeDaysFor(Astro.locals.studentId);
 const free = new Set(freeDays);
-const skipLectures = skipsLectures(Astro.locals.studentId);
+const recorded = recordedLecturesFor(Astro.locals.studentId);
 
 // ?suggest=1 previews a fewest-days plan on top of the student's pins;
 // nothing is pinned until they accept it.
 const suggesting = Astro.url.searchParams.has("suggest");
-const suggestion = suggesting ? suggestPlan(plan, freeDays, skipLectures) : null;
+const suggestion = suggesting ? suggestPlan(plan, freeDays, recorded) : null;
 const { blocks, clashes, onFreeDays, pinnedCount, total } = buildTimetable(plan, {
   freeDays,
   suggestion: suggestion?.choice,
-  skipLectures,
+  recorded,
 });
-const openCount = plan
-  .flatMap((s) => s.activities)
-  .filter((a) => a.pinnedId === null && !(skipLectures && isLecture(a.kind))).length;
+const skippedIds = new Set(blocks.filter((b) => b.skipped).map((b) => b.option.activityId));
+const openCount = plan.flatMap((s) => s.activities).filter((a) => a.pinnedId === null).length;
 const dayList = (days: number[]) => days.map((d) => DAYS[d].slice(0, 3)).join(", ");
 const added = new Set(plan.map((s) => s.code));
 const addable = listSubjects().filter((s) => !added.has(s.code));
@@ -112,8 +110,8 @@ const shown = (code: string) => blocks.filter((b) => b.subjectCode === code).len
                       <div class={`activity kind-${KIND(activity.kind)}`}>
                         <h3>
                           {activity.code} <span>{activity.kind}</span>
-                          {skipLectures && isLecture(activity.kind) && (
-                            <em class="tag recorded" title="You're skipping lectures, so this doesn't count">Recorded</em>
+                          {skippedIds.has(activity.id) && (
+                            <em class="tag recorded" title="Watching the recording, so it doesn't count">Recorded</em>
                           )}
                           {activity.fixed ? (
                             <em class="tag fixed" title="Only one class, so it's always in your week">Fixed</em>
@@ -252,19 +250,7 @@ const shown = (code: string) => blocks.filter((b) => b.subjectCode === code).len
                     </form>
                   ))}
                 </div>
-                <form method="post" action="/api/plan" class="lectures">
-                  <input type="hidden" name="action" value="lectures" />
-                  <label for="lectures">Lectures</label>
-                  <select id="lectures" name="lectures" data-autosubmit>
-                    <option value="attend" selected={!skipLectures}>Attend in person</option>
-                    <option value="skip" selected={skipLectures}>Skip, watch recordings</option>
-                  </select>
-                  <button class="btn small" data-autosubmit-fallback>Apply</button>
-                </form>
-                <span class="hint">
-                  Classes on free days fade out, and suggestions avoid them.
-                  {skipLectures && " Skipped lectures don't count toward days on campus or clashes."}
-                </span>
+                <span class="hint">Classes on free days fade out, and suggestions avoid them.</span>
               </div>
 
               {suggesting && (
@@ -318,11 +304,31 @@ const shown = (code: string) => blocks.filter((b) => b.subjectCode === code).len
               )}
 
               {onFreeDays.length > 0 && (
-                <div class="free-day-note">
-                  <h3>Classes on days you want free</h3>
+                <div class:list={["free-day-note", { settled: onFreeDays.every((c) => c.recorded) }]}>
+                  <h3>
+                    {onFreeDays.every((c) => c.recorded)
+                      ? "Your free days are clear, apart from recordings"
+                      : "Classes on days you want free"}
+                  </h3>
                   <ul>
                     {onFreeDays.map((c) => (
-                      <li>{c.name} is on {DAYS[c.day]}</li>
+                      <li>
+                        <span class:list={{ struck: c.recorded }}>
+                          {c.name} is on {DAYS[c.day]}
+                        </span>
+                        {c.lecture && (
+                          <form method="post" action="/api/plan" class="record">
+                            <input type="hidden" name="action" value="record" />
+                            <input type="hidden" name="activity" value={c.activityId} />
+                            <label>
+                              <input type="checkbox" name="recorded" checked={c.recorded} data-autosubmit />
+                              Watch recording
+                              <span class="sr-only"> of {c.name}</span>
+                            </label>
+                            <button class="btn small" data-autosubmit-fallback>Save</button>
+                          </form>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -334,7 +340,7 @@ const shown = (code: string) => blocks.filter((b) => b.subjectCode === code).len
                 <span class="key option">Still an option</span>
                 <span class="key clashing">Clashes with a pin</span>
                 {freeDays.length > 0 && <span class="key avoided">On a day you want free</span>}
-                {skipLectures && <span class="key recorded">Lecture you're skipping</span>}
+                {skippedIds.size > 0 && <span class="key recorded">Lecture watched as a recording</span>}
               </p>
               {clashes.length > 0 && (
                 <div class="clashes" role="alert">
@@ -398,7 +404,7 @@ const shown = (code: string) => blocks.filter((b) => b.subjectCode === code).len
                                   <span class="line where" aria-hidden="true">{b.skipped ? "Recorded" : b.option.location}</span>
                                   <span class="sr-only">
                                     {b.skipped
-                                      ? " (lecture you're skipping, watching the recording)"
+                                      ? " (lecture watched as a recording)"
                                       : b.fixed
                                       ? " (fixed, the only class)"
                                       : b.state === "pinned"
@@ -441,11 +447,11 @@ const shown = (code: string) => blocks.filter((b) => b.subjectCode === code).len
         sessionStorage.setItem(KEY, String(window.scrollY));
       } catch {}
     });
-    // 2. The lectures select saves as soon as it changes; its Apply button
-    //    is only for when this script doesn't run.
+    // 2. "Watch recording" checkboxes save as soon as they change; their Save
+    //    buttons are only for when this script doesn't run.
     for (const button of document.querySelectorAll<HTMLElement>("[data-autosubmit-fallback]")) button.hidden = true;
-    for (const select of document.querySelectorAll<HTMLSelectElement>("[data-autosubmit]")) {
-      select.addEventListener("change", () => select.form?.requestSubmit());
+    for (const input of document.querySelectorAll<HTMLInputElement>("[data-autosubmit]")) {
+      input.addEventListener("change", () => input.form?.requestSubmit());
     }
     // 3. Another tab in this browser changed the plan: show the new one.
     const source = new EventSource("/api/events");

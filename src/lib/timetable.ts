@@ -11,9 +11,10 @@ import type { ClassOption, PlannedSubject } from "./db";
 //   pinned class on a day meant to be free;
 // - a suggestion (see suggestPlan) previews a class for each unpinned
 //   activity, drawn as "suggested", and is treated like a pin for clashes;
-// - a student who skips lectures (watching the recordings) still sees them,
-//   marked skipped, but lectures then count for nothing: no clashes, no
-//   free-day warnings, no days on campus, no part in suggestions.
+// - a lecture on a day the student wants free can be watched as a recording
+//   instead: it still shows, marked skipped, but counts for nothing — no
+//   clashes, no free-day warning, no day on campus, no part in suggestions.
+//   Un-free the day and the lecture counts again.
 // Teaching weeks are ignored: every class here runs across the same weeks.
 
 export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
@@ -29,7 +30,7 @@ export type Block = {
   kind: string;
   state: BlockState;
   fixed: boolean;
-  skipped: boolean; // a lecture the student will watch recorded
+  skipped: boolean; // a lecture on a free day, watched as a recording
   clashesWith: string[]; // names of pinned classes this one overlaps
   lane: number; // position among blocks that overlap it on screen
   lanes: number;
@@ -55,14 +56,22 @@ export function clock(minutes: number): string {
 
 export const isLecture = (kind: string) => kind === "Lecture";
 
-type Options = { freeDays?: number[]; suggestion?: Map<number, number>; skipLectures?: boolean };
+// Whether a class is a lecture being watched as a recording: ticked, and on
+// a day the student wants free.
+const watchedRecorded = (
+  activity: { id: number; kind: string },
+  option: ClassOption,
+  recorded: Set<number>,
+  free: Set<number>,
+) => recorded.has(activity.id) && isLecture(activity.kind) && free.has(option.day);
+
+type Options = { freeDays?: number[]; suggestion?: Map<number, number>; recorded?: Set<number> };
 
 export function buildTimetable(
   plan: PlannedSubject[],
-  { freeDays = [], suggestion, skipLectures = false }: Options = {},
+  { freeDays = [], suggestion, recorded = new Set() }: Options = {},
 ) {
   const free = new Set(freeDays);
-  const skipped = (kind: string) => skipLectures && isLecture(kind);
   // what each activity has settled on: its pin, or else the suggested class
   const chosenId = (a: PlannedSubject["activities"][number]) => a.pinnedId ?? suggestion?.get(a.id) ?? null;
 
@@ -70,9 +79,9 @@ export function buildTimetable(
   const taken: Taken[] = [];
   for (const subject of plan) {
     for (const activity of subject.activities) {
-      if (skipped(activity.kind)) continue; // attended by recording, so it takes no time
       const option = activity.options.find((o) => o.id === chosenId(activity));
-      if (option) {
+      // a lecture watched as a recording takes no time on campus
+      if (option && !watchedRecorded(activity, option, recorded, free)) {
         taken.push({
           option,
           activityId: activity.id,
@@ -89,7 +98,7 @@ export function buildTimetable(
       const chosen = chosenId(activity);
       const shown = chosen ? activity.options.filter((o) => o.id === chosen) : activity.options;
       for (const option of shown) {
-        const isSkipped = skipped(activity.kind);
+        const isSkipped = option.id === chosen && watchedRecorded(activity, option, recorded, free);
         const clashesWith = isSkipped
           ? []
           : taken.filter((p) => p.activityId !== activity.id && overlaps(p.option, option)).map((p) => p.name);
@@ -129,10 +138,24 @@ export function buildTimetable(
     }
   }
 
-  // pinned classes sitting on a day the student wants free
-  const onFreeDays = taken
-    .filter((t) => !t.suggested && free.has(t.option.day))
-    .map((t) => ({ name: t.name, day: t.option.day }));
+  // pinned classes sitting on a day the student wants free. Lectures among
+  // them can be watched as a recording instead; those stay listed (so the
+  // choice can be undone) but no longer break the free day.
+  const onFreeDays = plan.flatMap((subject) =>
+    subject.activities.flatMap((activity) => {
+      const option = activity.options.find((o) => o.id === activity.pinnedId);
+      if (!option || !free.has(option.day)) return [];
+      return [
+        {
+          name: className(subject.code, activity.code, option.label),
+          day: option.day,
+          activityId: activity.id,
+          lecture: isLecture(activity.kind),
+          recorded: watchedRecorded(activity, option, recorded, free),
+        },
+      ];
+    }),
+  );
 
   const total = plan.reduce((n, s) => n + s.activities.length, 0);
   const pinnedCount = plan.reduce((n, s) => n + s.activities.filter((a) => a.pinnedId !== null).length, 0);
@@ -157,12 +180,14 @@ export type Suggestion = {
 export function suggestPlan(
   plan: PlannedSubject[],
   freeDays: number[] = [],
-  skipLectures = false,
+  recorded: Set<number> = new Set(),
 ): Suggestion | null {
   const free = new Set(freeDays);
-  // skipped lectures take no time, so they neither constrain nor get chosen
-  const acts = plan.flatMap((s) => s.activities).filter((a) => !(skipLectures && isLecture(a.kind)));
-  const base = acts.flatMap((a) => a.options.filter((o) => o.id === a.pinnedId));
+  const acts = plan.flatMap((s) => s.activities);
+  // lectures watched as recordings take no time, so they don't constrain
+  const base = acts.flatMap((a) =>
+    a.options.filter((o) => o.id === a.pinnedId && !watchedRecorded(a, o, recorded, free)),
+  );
   // most constrained first: fewer options means earlier pruning
   const open = acts.filter((a) => a.pinnedId === null).sort((a, b) => a.options.length - b.options.length);
   if (!open.length) return null;

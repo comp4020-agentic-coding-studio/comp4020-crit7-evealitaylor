@@ -263,40 +263,77 @@ describe("suggesting a fewest-days plan", () => {
   });
 });
 
-describe("skipping lectures", () => {
+describe("watching lectures as recordings", () => {
   const me = new Browser();
-  // COMP2100 LecA/01 is Tue 10–12 (fixed); COMP2310 ComA/02 is Tue 09–11.
+  // COMP2100 LecA/01 (fixed) is Tue 10–12, LecB/01 (fixed) Thu 14–15, and
+  // ComA/03 (a lab) Tue 14–16. COMP2310 ComA/02 is Tue 09–11.
 
   beforeAll(async () => {
     await me.load();
     await me.post({ action: "add-subject", subject: "COMP2100" });
     await me.post({ action: "add-subject", subject: "COMP2310" });
+    await me.post({ action: "pin", class: classId(await me.load(), "COMP2100 ComA/03") });
   });
 
-  const lab = async () =>
-    (await me.load()).querySelector<HTMLElement>('.week [data-class="COMP2310 ComA/02"]')?.dataset.state;
+  const block = async (name: string) =>
+    (await me.load()).querySelector<HTMLElement>(`.week [data-class="${name}"]`);
+  const recordBox = (doc: Document, name: string) =>
+    [...doc.querySelectorAll(".free-day-note li")]
+      .find((li) => li.textContent?.includes(name))
+      ?.querySelector<HTMLInputElement>('input[name="recorded"]');
+  const lectureId = async () =>
+    (await me.load())
+      .querySelector('.free-day-note input[name="action"][value="record"] ~ input[name="activity"]')
+      ?.getAttribute("value") ?? "";
 
-  it("treats a class over a lecture as clashing while lectures are attended", async () => {
-    expect(await lab()).toBe("clashing");
+  it("offers no recording option until the lecture is on a day kept free", async () => {
+    expect((await me.load()).querySelector('input[name="recorded"]')).toBeNull();
+    expect((await block("COMP2310 ComA/02"))?.dataset.state).toBe("clashing");
   });
 
-  it("keeps lectures on show but stops them clashing once skipped, and remembers it", async () => {
-    await me.post({ action: "lectures", lectures: "skip" });
+  it("offers it next to lectures on a free day, and only lectures", async () => {
+    await me.post({ action: "toggle-day", day: "1" }); // keep Tuesday free
     const doc = await me.load();
-    expect(doc.querySelector('.week [data-class="COMP2100 LecA/01"]')?.hasAttribute("data-skipped")).toBe(true);
-    expect(await lab()).toBe("option");
-    expect(doc.querySelector<HTMLSelectElement>("#lectures")?.value).toBe("skip");
+    expect(recordBox(doc, "COMP2100 LecA/01")).toBeTruthy();
+    // the lab is listed as being on Tuesday too, but gets no checkbox
+    const lab = [...doc.querySelectorAll(".free-day-note li")].find((li) => li.textContent?.includes("ComA/03"));
+    expect(lab).toBeTruthy();
+    expect(lab?.querySelector('input[name="recorded"]')).toBeNull();
   });
 
-  it("leaves lectures out of a suggested plan's days", async () => {
-    // Keep Tue and Thu free: with lectures skipped, those days hold only
-    // COMP2100's lectures, so a plan can avoid them entirely.
+  it("stops a recorded lecture counting, and remembers it", async () => {
+    await me.post({ action: "record", activity: await lectureId(), recorded: "on" });
+    expect((await block("COMP2100 LecA/01"))?.hasAttribute("data-skipped")).toBe(true);
+    // nothing clashes with a lecture you aren't attending
+    expect((await block("COMP2310 ComA/02"))?.dataset.state).not.toBe("clashing");
+    expect(recordBox(await me.load(), "COMP2100 LecA/01")?.checked).toBe(true);
+  });
+
+  it("won't record a class that isn't a lecture", async () => {
+    const labActivity = (await block("COMP2100 ComA/03"))?.querySelector('input[name="activity"]')?.getAttribute("value");
+    await me.post({ action: "record", activity: labActivity ?? "", recorded: "on" });
+    expect((await block("COMP2100 ComA/03"))?.hasAttribute("data-skipped")).toBe(false);
+  });
+
+  it("counts the lecture again once its day is no longer free", async () => {
+    await me.post({ action: "toggle-day", day: "1" });
+    expect((await block("COMP2100 LecA/01"))?.hasAttribute("data-skipped")).toBe(false);
+    expect((await block("COMP2310 ComA/02"))?.dataset.state).toBe("clashing");
+  });
+
+  it("leaves recorded lectures out of a suggested plan's days", async () => {
+    // Keep Tue and Thu free and watch both COMP2100 lectures recorded: then
+    // a plan can stay on Monday alone.
+    await me.post({ action: "unpin-all" });
     await me.post({ action: "toggle-day", day: "1" });
     await me.post({ action: "toggle-day", day: "3" });
+    for (const name of ["COMP2100 LecA/01", "COMP2100 LecB/01"]) {
+      const li = [...(await me.load()).querySelectorAll(".free-day-note li")].find((l) => l.textContent?.includes(name));
+      const activity = li?.querySelector('input[name="activity"]')?.getAttribute("value") ?? "";
+      await me.post({ action: "record", activity, recorded: "on" });
+    }
     const res = await fetch(new URL("/?suggest=1", baseUrl), { headers: { cookie: me.cookie } });
     const doc = new JSDOM(await res.text()).window.document;
-    const heading = doc.querySelector(".suggestion h3")?.textContent ?? "";
-    expect(heading).not.toMatch(/Tue|Thu/);
-    expect(doc.querySelector(".free-day-note")).toBeNull();
+    expect(doc.querySelector(".suggestion h3")?.textContent).toContain("1 day on campus (Mon)");
   });
 });

@@ -10,6 +10,7 @@ import {
   type ClassOption,
   classOptions,
   pins,
+  recordedLectures,
   type Subject,
   studentSubjects,
   students,
@@ -86,6 +87,9 @@ export function removeSubject(studentId: string, subjectCode: string): void {
       tx.delete(pins)
         .where(and(eq(pins.studentId, studentId), inArray(pins.activityId, ids)))
         .run();
+      tx.delete(recordedLectures)
+        .where(and(eq(recordedLectures.studentId, studentId), inArray(recordedLectures.activityId, ids)))
+        .run();
     }
     tx.delete(studentSubjects)
       .where(and(eq(studentSubjects.studentId, studentId), eq(studentSubjects.subjectCode, subjectCode)))
@@ -118,6 +122,7 @@ export function pinClass(studentId: string, classOptionId: number): void {
 export function clearPlan(studentId: string): void {
   db.transaction((tx) => {
     tx.delete(pins).where(eq(pins.studentId, studentId)).run();
+    tx.delete(recordedLectures).where(eq(recordedLectures.studentId, studentId)).run();
     tx.delete(studentSubjects).where(eq(studentSubjects.studentId, studentId)).run();
   });
 }
@@ -148,16 +153,37 @@ export function toggleFreeDay(studentId: string, day: number): void {
     .run();
 }
 
-export function skipsLectures(studentId: string): boolean {
-  const row = db.select({ skip: students.skipLectures }).from(students).where(eq(students.id, studentId)).get();
-  return row?.skip === 1;
+export function recordedLecturesFor(studentId: string): Set<number> {
+  return new Set(
+    db
+      .select({ activityId: recordedLectures.activityId })
+      .from(recordedLectures)
+      .where(eq(recordedLectures.studentId, studentId))
+      .all()
+      .map((r) => r.activityId),
+  );
 }
 
-export function setSkipLectures(studentId: string, skip: boolean): void {
-  db.update(students)
-    .set({ skipLectures: skip ? 1 : 0 })
-    .where(eq(students.id, studentId))
-    .run();
+// Only lectures can be watched as a recording, and only of subjects the
+// student has added.
+export function setRecorded(studentId: string, activityId: number, recorded: boolean): void {
+  if (!recorded) {
+    db.delete(recordedLectures)
+      .where(and(eq(recordedLectures.studentId, studentId), eq(recordedLectures.activityId, activityId)))
+      .run();
+    return;
+  }
+  const lecture = db
+    .select()
+    .from(activities)
+    .innerJoin(
+      studentSubjects,
+      and(eq(studentSubjects.subjectCode, activities.subjectCode), eq(studentSubjects.studentId, studentId)),
+    )
+    .where(and(eq(activities.id, activityId), eq(activities.kind, "Lecture")))
+    .get();
+  if (!lecture) return;
+  db.insert(recordedLectures).values({ studentId, activityId }).onConflictDoNothing().run();
 }
 
 // Accepting a suggested plan pins each of its classes. pinClass only pins

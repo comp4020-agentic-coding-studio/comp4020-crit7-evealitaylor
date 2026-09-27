@@ -36,10 +36,13 @@ through MyTimetable.
 2. **Mark the days you'd rather keep free.** Under *Your week*, press a
    day in *Keep days free*, such as Fri. Classes on that day fade out, so
    the options that keep it clear stand out. Press it again to undo.
-   If you plan to skip lectures and watch the recordings instead, set
-   *Lectures* to **Skip, watch recordings**. Lectures stay on the week,
-   faded and marked *Recorded*, but they stop counting: they can't clash
-   with anything, don't break a free day, and don't add a day on campus.
+   If a lecture you've pinned falls on one of those days, it's listed in an
+   amber note above the week, with a **Watch recording** checkbox next to
+   it. Tick it if you'll catch up on the recording instead of going. The
+   lecture stays on the week, faded and marked *Recorded*, but stops
+   counting: it can't clash with anything, doesn't break the free day, and
+   doesn't add a day on campus. Only lectures get the checkbox, since
+   tutorials and labs aren't recorded.
 3. **Pin your classes, working around what's fixed.** Lectures with a
    single class are already there, marked *Fixed*. For everything else,
    press **Pin** next to a class in the list, or click its block on the
@@ -73,7 +76,8 @@ through MyTimetable.
 - **Faded, dashed block**: a class you could still choose.
 - **Grey, hatched block**: a class that clashes with one you've pinned.
 - **Very faint block**: a class on a day you want to keep free.
-- **Dotted block marked "Recorded"**: a lecture you're skipping.
+- **Dotted block marked "Recorded"**: a lecture you'll watch as a
+  recording.
 - **Colour**: the kind of activity, as in Web Publisher. Lectures are
   lavender, computer labs blue, tutorials green and workshops pink.
 

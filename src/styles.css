@@ -828,25 +828,47 @@ a.btn {
   }
 }
 
-/* ---- lectures skipped (watched as recordings) -------------------------- */
+/* ---- lectures watched as recordings ------------------------------------ */
 
-.lectures {
+.free-day-note li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.free-day-note .struck {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.free-day-note.settled {
+  background: #f6f6f3;
+  border-color: var(--line);
+}
+
+.free-day-note.settled h3 {
+  color: var(--muted);
+}
+
+.record {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-}
-
-.lectures label {
-  font-weight: 600;
-}
-
-.lectures select {
-  padding: 0.25rem 0.5rem;
-  font: inherit;
   font-size: 0.82rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #fff;
+}
+
+.record label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+.record input[type="checkbox"] {
+  accent-color: var(--ink);
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .tag.recorded {

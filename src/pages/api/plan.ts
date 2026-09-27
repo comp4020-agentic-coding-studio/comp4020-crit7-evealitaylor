@@ -5,7 +5,7 @@ import {
   pinClass,
   pinClasses,
   removeSubject,
-  setSkipLectures,
+  setRecorded,
   toggleFreeDay,
   unpinActivity,
   unpinAll,
@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   else if (action === "unpin-all") unpinAll(id);
   else if (action === "clear") clearPlan(id);
   else if (action === "toggle-day") toggleFreeDay(id, Number(form.get("day")));
-  else if (action === "lectures") setSkipLectures(id, form.get("lectures") === "skip");
+  else if (action === "record") setRecorded(id, Number(form.get("activity")), form.get("recorded") === "on");
   else if (action === "accept") pinClasses(id, form.getAll("class").map(Number).filter(Number.isInteger));
   else return new Response("unknown action", { status: 400 });
 

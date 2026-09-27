@@ -28,9 +28,11 @@ because I try to fit my subjects into as few days as possible.
 - A suggestion never overrides the student's own pins, and never pins
   anything until they accept it.
 - Lectures are often recorded, and some students skip them to watch later.
-  A "lectures" setting next to "Keep days free" lets them choose: when
-  lectures are skipped, they still show (faded, as recorded) but don't
-  count for clashes, free days, days on campus, or suggestions.
+  This is chosen per lecture, not globally: each lecture that falls on a
+  day the student wants free gets a "Watch recording" checkbox right next
+  to it (never shown for non-lectures). A lecture watched as a recording
+  still shows (faded, marked recorded) but doesn't count for clashes, free
+  days, days on campus, or suggestions, and only while its day is free.
 - Keep the behaviour I like: once a class is pinned, the activity's other
   options disappear, freeing space for what still needs choosing.
 
