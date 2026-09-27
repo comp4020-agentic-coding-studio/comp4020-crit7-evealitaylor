@@ -1,54 +1,43 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-Written by you, for a reader: how you got from the brief to the harness and
-agentic workflow behind this submission. Markers read this file and follow its
-citations; they don't trawl the repo for evidence you didn't point at.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and its
-[word counts](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#word-counts)
-cover every deliverable.
-
 ## What I built
 
-A sentence or two. `README.md` is where the account of what the app is and what
-good means here lives; this file is how you got there.
+A redesign of one slice of ANU's timetable Web Publisher: pinning the class
+you intend to take, so the week shows your real timetable instead of every
+option at once, plus tools for fitting that week into as few days as
+possible. `README.md` explains how it works.
 
 ## How I got here
 
-The account of the process: how the work actually went, and how you knew the
-result was right. Tell it in whatever order makes it clear. A weekly prototype
-needs a paragraph or two; an assignment needs more.
+I started from my own frustration, and the first prompt set the scope:
 
-Cite the record as you go, as links whose text is the commit hash or range and
-whose target is this repo's commit or compare URL, so a reader clicks straight
-to the evidence:
+> as someone who needs to fit all my subjects into as few days as possible,
+> ive always hated how i cant temporarily select a single class … so i want
+> the redesign to focus on adding that specific feature
 
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
+The agent read the brief and starter, asked me to pick the data, identity
+and scope, then split setup from the feature:
+[`9122e64`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-evealitaylor/commit/9122e64),
+[`a943c81`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-evealitaylor/commit/a943c81).
 
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
+Most of my direction was correction. I asked it to borrow more from the
+original, and it went too far, so I pulled it back:
 
-> the prompt, verbatim
+> i think youve gone too much in the direction of the original so scale it
+> back a little … how can we improve this one piece around timetable
+> planning and working out an efficient class schedule
 
-Screenshots are welcome where one carries the point better than a sentence does.
-Commit the file to this repo and link it with a **relative** path, which is what
-makes it render on GitHub: `![alt text](docs/before.png)`. Images don't count
-towards the word count and don't replace the citation.
+That produced fixed lectures, "keep days free" and a fewest-days suggester
+([`1e199d5`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-evealitaylor/commit/1e199d5)).
+A global "skip lectures" setting became a per-lecture checkbox when I
+pointed out only lectures on free days need it
+([`e174a09...62926ea`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-evealitaylor/compare/e174a09...62926ea)).
 
-## Before you ship
+Each rule I stated went into `CLAUDE.md`
+([`b8d9950`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-evealitaylor/commit/b8d9950)):
+restart the dev server so I could watch changes, confirm destructive
+actions (after I wiped my subjects by accident), commit as I go.
 
-`pnpm check:evidence` verifies that this comment is gone, that your citations
-resolve to real commits, that a crit week's reflection entry is in
-`reflections/`, and that your `CLAUDE.md` is there. It checks that your account
-is traceable, not that it is good: that is the marker's call.
-
-Images aren't checked: unlike a citation whose SHA doesn't resolve, a broken
-image is visible the moment this file is rendered on GitHub.
+I knew it was right from two sides: `spec/timetable.test.ts` checks the
+contracts over HTTP (pins survive a reload, stay per-browser, clashes are
+flagged), and I checked every change in the browser myself.
