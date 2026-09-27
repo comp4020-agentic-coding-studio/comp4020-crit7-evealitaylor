@@ -1,5 +1,15 @@
 import type { APIRoute } from "astro";
-import { addSubject, pinClass, removeSubject, unpinActivity } from "../../lib/db";
+import {
+  addSubject,
+  clearPlan,
+  pinClass,
+  pinClasses,
+  removeSubject,
+  setSkipLectures,
+  toggleFreeDay,
+  unpinActivity,
+  unpinAll,
+} from "../../lib/db";
 import { planChanged } from "../../lib/events";
 
 // Every change to a draft timetable is a plain HTML form POST here, followed
@@ -15,6 +25,11 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   else if (action === "remove-subject") removeSubject(id, String(form.get("subject") ?? ""));
   else if (action === "pin") pinClass(id, Number(form.get("class")));
   else if (action === "unpin") unpinActivity(id, Number(form.get("activity")));
+  else if (action === "unpin-all") unpinAll(id);
+  else if (action === "clear") clearPlan(id);
+  else if (action === "toggle-day") toggleFreeDay(id, Number(form.get("day")));
+  else if (action === "lectures") setSkipLectures(id, form.get("lectures") === "skip");
+  else if (action === "accept") pinClasses(id, form.getAll("class").map(Number).filter(Number.isInteger));
   else return new Response("unknown action", { status: 400 });
 
   planChanged(id);

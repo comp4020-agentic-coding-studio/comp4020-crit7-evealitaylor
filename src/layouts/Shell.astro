@@ -1,0 +1,44 @@
+---
+// The page chrome. It nods to the real Web Publisher (the dark tab bar, the
+// beige accent) without copying it: one slim bar with the name and the tabs,
+// and a quiet note that this is a prototype. Each page brings its own h1.
+import "../styles.css";
+
+interface Props {
+  title: string;
+  current: "planner" | "about";
+}
+const { title, current } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <header>
+      <div class="top-bar">
+        <div class="top-inner">
+          <p class="brand"><span class="mark" aria-hidden="true"></span>ANU <span>Web Publisher</span></p>
+          <nav aria-label="site">
+            <a href="/" aria-current={current === "planner" ? "page" : undefined}>Planner</a>
+            <a href="/readme/" aria-current={current === "about" ? "page" : undefined}>How it works</a>
+          </nav>
+        </div>
+      </div>
+      <p class="prototype-note">
+        <b>Prototype.</b> A student redesign of timetable planning. Subjects and
+        class times are invented, and nothing here enrols you.
+      </p>
+    </header>
+    <div class="page">
+      <slot />
+    </div>
+  </body>
+</html>

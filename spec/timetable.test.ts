@@ -79,9 +79,11 @@ describe("pinning a class", () => {
     }
   });
 
-  it("leaves other activities of the subject untouched", async () => {
-    expect(blocks(await me.load(), "COMP2100 LecA")).toHaveLength(1);
-    expect(blocks(await me.load(), "COMP2100 LecA")[0].dataset.state).toBe("option");
+  it("counts a single-class activity as pinned from the start, and won't unpin it", async () => {
+    const [lecture] = blocks(await me.load(), "COMP2100 LecA");
+    expect(lecture.dataset.state).toBe("pinned");
+    expect(lecture.hasAttribute("data-fixed")).toBe(true);
+    expect(lecture.querySelector("input[name='action']")).toBeNull();
   });
 
   it("keeps pins to the browser that made them", async () => {
@@ -145,5 +147,156 @@ describe("clashes", () => {
     const doc = await me.load();
     expect(doc.querySelector('[role="alert"]')).toBeNull();
     expect(blocks(doc, "COMP2310 ComA")).toHaveLength(0);
+  });
+});
+
+describe("adding subjects and starting over", () => {
+  const me = new Browser();
+
+  it("offers only subjects not yet added in the dropdown", async () => {
+    const before = [...(await me.load()).querySelectorAll("#subject option")].map((o) => o.getAttribute("value"));
+    expect(before).toContain("COMP3600");
+    await me.post({ action: "add-subject", subject: "COMP3600" });
+    const after = [...(await me.load()).querySelectorAll("#subject option")].map((o) => o.getAttribute("value"));
+    expect(after).not.toContain("COMP3600");
+    expect(blocks(await me.load(), "COMP3600 TutA")).toHaveLength(5);
+  });
+
+  it("unpins every class but keeps the subjects", async () => {
+    await me.post({ action: "pin", class: classId(await me.load(), "COMP3600 TutA/02") });
+    await me.post({ action: "unpin-all" });
+    const doc = await me.load();
+    // fixed, single-class activities stay: there's nothing to unpin them to
+    expect(doc.querySelectorAll('[data-state="pinned"]:not([data-fixed])')).toHaveLength(0);
+    expect(blocks(doc, "COMP3600 TutA")).toHaveLength(5);
+  });
+
+  it("removes every subject only through the confirm step", async () => {
+    const doc = await me.load();
+    // the clear button is tucked inside a closed <details>, away from Unpin all
+    const clear = doc.querySelector('input[name="action"][value="clear"]');
+    expect(clear?.closest("details")).not.toBeNull();
+    expect(clear?.closest("details")?.hasAttribute("open")).toBe(false);
+    await me.post({ action: "clear" });
+    expect((await me.load()).querySelectorAll(".week [data-class]")).toHaveLength(0);
+  });
+});
+
+describe("keeping days free", () => {
+  const me = new Browser();
+  // COMP2100 ComA/07 is Fri 11–13; ComA/01 is Mon 09–11.
+
+  beforeAll(async () => {
+    await me.load();
+    await me.post({ action: "add-subject", subject: "COMP2100" });
+    await me.post({ action: "toggle-day", day: "4" });
+  });
+
+  const state = async (name: string) =>
+    (await me.load()).querySelector<HTMLElement>(`.week [data-class="${name}"]`)?.dataset.state;
+
+  it("fades options on a day kept free, and remembers the choice", async () => {
+    expect(await state("COMP2100 ComA/07")).toBe("avoided");
+    expect(await state("COMP2100 ComA/01")).toBe("option");
+    const toggle = (await me.load()).querySelector('button[aria-label="Keep Friday free"]');
+    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("toggles back off", async () => {
+    await me.post({ action: "toggle-day", day: "4" });
+    expect(await state("COMP2100 ComA/07")).toBe("option");
+  });
+});
+
+describe("suggesting a fewest-days plan", () => {
+  const me = new Browser();
+  // Fixed: COMP2100 LecA Tue, LecB Thu; COMP2310 LecA Mon. Both labs have a
+  // class on Mon, Tue or Thu, so the best plan needs only those three days.
+
+  beforeAll(async () => {
+    await me.load();
+    await me.post({ action: "add-subject", subject: "COMP2100" });
+    await me.post({ action: "add-subject", subject: "COMP2310" });
+  });
+
+  const suggest = async () => {
+    const res = await fetch(new URL("/?suggest=1", baseUrl), { headers: { cookie: me.cookie } });
+    return new JSDOM(await res.text()).window.document;
+  };
+
+  it("previews a clash-free plan on the fewest days without pinning anything", async () => {
+    const doc = await suggest();
+    expect(doc.querySelector(".suggestion h3")?.textContent).toContain("3 days on campus");
+    expect(doc.querySelectorAll('.week [data-state="suggested"]')).toHaveLength(2);
+    expect(doc.querySelector('[role="alert"]')).toBeNull();
+    // nothing was pinned by looking
+    expect((await me.load()).querySelectorAll('.week [data-state="suggested"]')).toHaveLength(0);
+    expect(blocks(await me.load(), "COMP2100 ComA")).toHaveLength(7);
+  });
+
+  it("pins the suggested classes when accepted", async () => {
+    const accept = (await suggest()).querySelector('input[name="action"][value="accept"]')?.closest("form");
+    const ids = [...(accept?.querySelectorAll('input[name="class"]') ?? [])].map((i) => i.getAttribute("value") ?? "");
+    expect(ids).toHaveLength(2);
+    const body = new URLSearchParams([["action", "accept"], ...ids.map((id) => ["class", id])]);
+    await fetch(new URL("/api/plan", baseUrl), {
+      method: "POST",
+      headers: { origin: baseUrl, cookie: me.cookie },
+      body,
+      redirect: "manual",
+    });
+    const doc = await me.load();
+    expect(doc.querySelector("#status")?.textContent).toContain("5 of 5");
+    expect(blocks(doc, "COMP2100 ComA")).toHaveLength(1);
+    expect(doc.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("respects existing pins and free days", async () => {
+    await me.post({ action: "unpin-all" });
+    await me.post({ action: "toggle-day", day: "0" }); // keep Monday free
+    const doc = await suggest();
+    // COMP2310's lecture is fixed on Monday, so that can't be helped, but
+    // neither lab should land there
+    const suggested = [...doc.querySelectorAll<HTMLElement>('.week [data-state="suggested"]')];
+    expect(suggested).toHaveLength(2);
+    for (const b of suggested) expect(b.closest(".day")?.querySelector("h3")?.textContent).not.toContain("Mon");
+  });
+});
+
+describe("skipping lectures", () => {
+  const me = new Browser();
+  // COMP2100 LecA/01 is Tue 10–12 (fixed); COMP2310 ComA/02 is Tue 09–11.
+
+  beforeAll(async () => {
+    await me.load();
+    await me.post({ action: "add-subject", subject: "COMP2100" });
+    await me.post({ action: "add-subject", subject: "COMP2310" });
+  });
+
+  const lab = async () =>
+    (await me.load()).querySelector<HTMLElement>('.week [data-class="COMP2310 ComA/02"]')?.dataset.state;
+
+  it("treats a class over a lecture as clashing while lectures are attended", async () => {
+    expect(await lab()).toBe("clashing");
+  });
+
+  it("keeps lectures on show but stops them clashing once skipped, and remembers it", async () => {
+    await me.post({ action: "lectures", lectures: "skip" });
+    const doc = await me.load();
+    expect(doc.querySelector('.week [data-class="COMP2100 LecA/01"]')?.hasAttribute("data-skipped")).toBe(true);
+    expect(await lab()).toBe("option");
+    expect(doc.querySelector<HTMLSelectElement>("#lectures")?.value).toBe("skip");
+  });
+
+  it("leaves lectures out of a suggested plan's days", async () => {
+    // Keep Tue and Thu free: with lectures skipped, those days hold only
+    // COMP2100's lectures, so a plan can avoid them entirely.
+    await me.post({ action: "toggle-day", day: "1" });
+    await me.post({ action: "toggle-day", day: "3" });
+    const res = await fetch(new URL("/?suggest=1", baseUrl), { headers: { cookie: me.cookie } });
+    const doc = new JSDOM(await res.text()).window.document;
+    const heading = doc.querySelector(".suggestion h3")?.textContent ?? "";
+    expect(heading).not.toMatch(/Tue|Thu/);
+    expect(doc.querySelector(".free-day-note")).toBeNull();
   });
 });

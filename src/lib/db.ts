@@ -115,17 +115,72 @@ export function pinClass(studentId: string, classOptionId: number): void {
     .run();
 }
 
+export function clearPlan(studentId: string): void {
+  db.transaction((tx) => {
+    tx.delete(pins).where(eq(pins.studentId, studentId)).run();
+    tx.delete(studentSubjects).where(eq(studentSubjects.studentId, studentId)).run();
+  });
+}
+
+export function unpinAll(studentId: string): void {
+  db.delete(pins).where(eq(pins.studentId, studentId)).run();
+}
+
 export function unpinActivity(studentId: string, activityId: number): void {
   db.delete(pins)
     .where(and(eq(pins.studentId, studentId), eq(pins.activityId, activityId)))
     .run();
 }
 
-export type PlannedActivity = Activity & { options: ClassOption[]; pinnedId: number | null };
+export function freeDaysFor(studentId: string): number[] {
+  const row = db.select({ freeDays: students.freeDays }).from(students).where(eq(students.id, studentId)).get();
+  return (row?.freeDays ?? "").split(",").filter(Boolean).map(Number);
+}
+
+export function toggleFreeDay(studentId: string, day: number): void {
+  if (!Number.isInteger(day) || day < 0 || day > 4) return;
+  const days = new Set(freeDaysFor(studentId));
+  if (days.has(day)) days.delete(day);
+  else days.add(day);
+  db.update(students)
+    .set({ freeDays: [...days].sort().join(",") })
+    .where(eq(students.id, studentId))
+    .run();
+}
+
+export function skipsLectures(studentId: string): boolean {
+  const row = db.select({ skip: students.skipLectures }).from(students).where(eq(students.id, studentId)).get();
+  return row?.skip === 1;
+}
+
+export function setSkipLectures(studentId: string, skip: boolean): void {
+  db.update(students)
+    .set({ skipLectures: skip ? 1 : 0 })
+    .where(eq(students.id, studentId))
+    .run();
+}
+
+// Accepting a suggested plan pins each of its classes. pinClass only pins
+// classes of subjects the student has added, so a stale or tampered form
+// can't pin anything else.
+export function pinClasses(studentId: string, classOptionIds: number[]): void {
+  db.transaction(() => {
+    for (const id of classOptionIds) pinClass(studentId, id);
+  });
+}
+
+// An activity offering a single class is "fixed": there's nothing to choose,
+// so it counts as pinned without the student doing anything.
+export type PlannedActivity = Activity & {
+  options: ClassOption[];
+  pinnedId: number | null;
+  fixed: boolean;
+};
 export type PlannedSubject = Subject & { activities: PlannedActivity[] };
 
 // Everything the timetable page shows for one student: their subjects, each
-// subject's activities, every class on offer, and which one (if any) is pinned.
+// subject's activities, every class on offer, and which one (if any) is
+// pinned, counting a fixed activity's only class as pinned.
 export function planFor(studentId: string): PlannedSubject[] {
   const chosen = db
     .select({ code: subjects.code, name: subjects.name })
@@ -167,10 +222,15 @@ export function planFor(studentId: string): PlannedSubject[] {
     ...subject,
     activities: acts
       .filter((a) => a.subjectCode === subject.code)
-      .map((a) => ({
-        ...a,
-        options: opts.filter((o) => o.activityId === a.id),
-        pinnedId: pinned.get(a.id) ?? null,
-      })),
+      .map((a) => {
+        const options = opts.filter((o) => o.activityId === a.id);
+        const fixed = options.length === 1;
+        return {
+          ...a,
+          options,
+          pinnedId: fixed ? options[0].id : (pinned.get(a.id) ?? null),
+          fixed,
+        };
+      }),
   }));
 }
