@@ -1,8 +1,28 @@
 ---
-import { listSubjects } from "../lib/db";
+import { listSubjects, planFor } from "../lib/db";
+import {
+  buildTimetable,
+  className,
+  DAY_END,
+  DAY_START,
+  DAYS,
+  hhmm,
+} from "../lib/timetable";
 import "../styles.css";
 
-const subjects = listSubjects();
+const plan = planFor(Astro.locals.studentId);
+const { blocks, clashes, pinnedCount, total } = buildTimetable(plan);
+const added = new Set(plan.map((s) => s.code));
+const addable = listSubjects().filter((s) => !added.has(s.code));
+
+// one hue per subject, in the order the student added them
+const HUES = [212, 150, 20, 280, 45, 340];
+const hue = new Map(plan.map((s, i) => [s.code, HUES[i % HUES.length]]));
+
+const span = DAY_END - DAY_START;
+const hours = Array.from({ length: span / 60 }, (_, i) => DAY_START + i * 60);
+const when = (o: { day: number; start: number; end: number }) =>
+  `${DAYS[o.day].slice(0, 3)} ${hhmm(o.start)}–${hhmm(o.end)}`;
 ---
 
 <!doctype html>
@@ -14,15 +34,217 @@ const subjects = listSubjects();
   </head>
   <body>
     <nav aria-label="site">
-      <a href="/">Timetable</a>
+      <a href="/" aria-current="page">Timetable</a>
       <a href="/readme/">About</a>
     </nav>
-    <main>
+    <main class="wide">
       <h1>My draft timetable</h1>
-      <p>The class catalogue is seeded; the timetable itself comes next.</p>
-      <ul>
-        {subjects.map((s) => <li>{s.code} {s.name}</li>)}
-      </ul>
+      <p class="lede">
+        Pin the class you intend to enrol in for each activity, and the week
+        shows only that one, so you can see what your timetable would
+        actually look like. Unpin it and every option comes back. Nothing
+        here enrols you; your pins are saved in this browser.
+      </p>
+
+      <form method="post" action="/api/plan" class="add">
+        <input type="hidden" name="action" value="add-subject" />
+        <label for="subject">Add a subject</label>
+        <select id="subject" name="subject" required disabled={!addable.length}>
+          {addable.map((s) => <option value={s.code}>{s.code} {s.name}</option>)}
+        </select>
+        <button disabled={!addable.length}>Add</button>
+      </form>
+
+      {
+        plan.length === 0 ? (
+          <p class="empty">Add a subject to see every class it offers.</p>
+        ) : (
+          <>
+            <p class="status" id="status">
+              <strong>{pinnedCount} of {total}</strong> activities pinned.
+              {pinnedCount < total && " Faded blocks are the classes you haven't chosen between yet."}
+            </p>
+
+            {clashes.length > 0 && (
+              <div class="clashes" role="alert">
+                <h2>Clashes in your pinned classes</h2>
+                <ul>
+                  {clashes.map((c) => (
+                    <li>
+                      {c.a} and {c.b} overlap on {DAYS[c.day]}, {hhmm(c.start)}–{hhmm(c.end)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div class="layout">
+              <section class="subjects" aria-labelledby="subjects-heading">
+                <h2 id="subjects-heading">Your subjects</h2>
+                {plan.map((subject) => (
+                  <article class="subject" style={`--hue: ${hue.get(subject.code)}`}>
+                    <header>
+                      <h3>
+                        {subject.code} <span>{subject.name}</span>
+                      </h3>
+                      <form method="post" action="/api/plan">
+                        <input type="hidden" name="action" value="remove-subject" />
+                        <input type="hidden" name="subject" value={subject.code} />
+                        <button class="quiet" aria-label={`Remove ${subject.code}`}>Remove</button>
+                      </form>
+                    </header>
+                    {subject.activities.map((activity) => {
+                      const pinned = activity.options.find((o) => o.id === activity.pinnedId);
+                      const others = activity.options.filter((o) => o !== pinned);
+                      const clashNote = (id: number) =>
+                        blocks.find((b) => b.option.id === id)?.clashesWith ?? [];
+                      return (
+                        <div class="activity" data-activity={`${subject.code} ${activity.code}`}>
+                          <h4>
+                            {activity.code} <span>{activity.kind}</span>
+                            {pinned ? <em class="tag">pinned</em> : activity.options.length > 1 && <em class="tag open">{activity.options.length} options</em>}
+                          </h4>
+                          {pinned && (
+                            <form method="post" action="/api/plan" class="option is-pinned">
+                              <input type="hidden" name="action" value="unpin" />
+                              <input type="hidden" name="activity" value={activity.id} />
+                              <span>
+                                <b>{pinned.label}</b> {when(pinned)} · {pinned.location}
+                              </span>
+                              <button aria-label={`Unpin ${className(subject.code, activity.code, pinned.label)}`}>Unpin</button>
+                            </form>
+                          )}
+                          {pinned && others.length > 0 && (
+                            <details>
+                              <summary>Switch class ({others.length} other{others.length > 1 && "s"})</summary>
+                              <ul class="options">
+                                {others.map((o) => (
+                                  <li>
+                                    <form method="post" action="/api/plan" class="option">
+                                      <input type="hidden" name="action" value="pin" />
+                                      <input type="hidden" name="class" value={o.id} />
+                                      <span>
+                                        <b>{o.label}</b> {when(o)} · {o.location}
+                                      </span>
+                                      <button aria-label={`Pin ${className(subject.code, activity.code, o.label)} instead`}>Pin</button>
+                                    </form>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                          {!pinned && (
+                            <ul class="options">
+                              {others.map((o) => {
+                                const clash = clashNote(o.id);
+                                return (
+                                  <li>
+                                    <form method="post" action="/api/plan" class:list={["option", { "is-clashing": clash.length }]}>
+                                      <input type="hidden" name="action" value="pin" />
+                                      <input type="hidden" name="class" value={o.id} />
+                                      <span>
+                                        <b>{o.label}</b> {when(o)} · {o.location}
+                                        {clash.length > 0 && <small>clashes with {clash.join(", ")}</small>}
+                                      </span>
+                                      <button aria-label={`Pin ${className(subject.code, activity.code, o.label)}`}>Pin</button>
+                                    </form>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </article>
+                ))}
+              </section>
+
+              <section class="week-wrap" aria-labelledby="week-heading">
+                <h2 id="week-heading">Week view</h2>
+                <p class="legend">
+                  <span class="key pinned">Pinned</span>
+                  <span class="key option">Still an option</span>
+                  <span class="key clashing">Clashes with a pinned class</span>
+                </p>
+                <div class="scroller" tabindex="0" role="region" aria-label="Week grid, scrolls sideways on small screens">
+                  <div class="week" style={`--hours: ${hours.length}`}>
+                    <div class="times" aria-hidden="true">
+                      {hours.map((h) => <span>{hhmm(h)}</span>)}
+                    </div>
+                    {DAYS.map((day, d) => (
+                      <div class="day">
+                        <h3>{day}</h3>
+                        <div class="slots">
+                          {blocks
+                            .filter((b) => b.option.day === d)
+                            .map((b) => {
+                              const name = className(b.subjectCode, b.activityCode, b.option.label);
+                              const detail = `${b.kind}, ${when(b.option)}, ${b.option.location}${b.clashesWith.length ? `, clashes with ${b.clashesWith.join(", ")}` : ""}`;
+                              return (
+                                <form
+                                  method="post"
+                                  action="/api/plan"
+                                  class:list={["block", b.state, { "in-clash": b.state === "pinned" && b.clashesWith.length }]}
+                                  data-class={name}
+                                  data-state={b.state}
+                                  style={`--hue: ${hue.get(b.subjectCode)}; top: ${((b.option.start - DAY_START) / span) * 100}%; height: ${((b.option.end - b.option.start) / span) * 100}%; left: ${(b.lane / b.lanes) * 100}%; width: ${100 / b.lanes}%`}
+                                >
+                                  {b.state === "pinned" ? (
+                                    <>
+                                      <input type="hidden" name="action" value="unpin" />
+                                      <input type="hidden" name="activity" value={b.option.activityId} />
+                                    </>
+                                  ) : (
+                                    <>
+                                      <input type="hidden" name="action" value="pin" />
+                                      <input type="hidden" name="class" value={b.option.id} />
+                                    </>
+                                  )}
+                                  <button title={`${name}: ${detail}`}>
+                                    <span class="name">{b.subjectCode} {b.activityCode}/{b.option.label}</span>
+                                    <span class="sr-only">
+                                      {b.state === "pinned" ? " (pinned, press to unpin)" : " (press to pin)"}, {detail}
+                                    </span>
+                                    <span class="time" aria-hidden="true">{hhmm(b.option.start)}</span>
+                                  </button>
+                                </form>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </div>
+          </>
+        )
+      }
     </main>
+    <script>
+      // Progressive enhancement only; every control above is a plain form.
+      // 1. Keep the scroll position across the POST → redirect → reload.
+      const KEY = "timetable-scroll";
+      try {
+        const y = sessionStorage.getItem(KEY);
+        if (y) {
+          sessionStorage.removeItem(KEY);
+          window.scrollTo(0, Number(y));
+        }
+      } catch {}
+      let submitting = false;
+      document.addEventListener("submit", () => {
+        submitting = true;
+        try {
+          sessionStorage.setItem(KEY, String(window.scrollY));
+        } catch {}
+      });
+      // 2. Another tab in this browser changed the plan: show the new one.
+      const source = new EventSource("/api/events");
+      source.addEventListener("plan", () => {
+        if (!submitting) location.reload();
+      });
+    </script>
   </body>
 </html>
