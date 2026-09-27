@@ -1,0 +1,1 @@
+ALTER TABLE `students` ADD `free_days` text DEFAULT '' NOT NULL;

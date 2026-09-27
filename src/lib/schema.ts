@@ -42,6 +42,10 @@ export const classOptions = sqliteTable("class_options", {
 // A student is a browser: the `sid` cookie holds this id (see middleware.ts).
 export const students = sqliteTable("students", {
   id: text().primaryKey(),
+  // days the student would rather keep free of classes: "0,4" = Mon and Fri
+  freeDays: text("free_days").notNull().default(""),
+  // 1 when the student skips lectures (watching recordings instead)
+  skipLectures: int("skip_lectures").notNull().default(0),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),

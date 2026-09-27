@@ -22,6 +22,20 @@
       "when": 1790499551090,
       "tag": "0002_timetable",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790503068320,
+      "tag": "0003_free_days",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790503848276,
+      "tag": "0004_skip_lectures",
+      "breakpoints": true
     }
   ]
 }

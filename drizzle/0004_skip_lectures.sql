@@ -1,0 +1,1 @@
+ALTER TABLE `students` ADD `skip_lectures` integer DEFAULT 0 NOT NULL;
