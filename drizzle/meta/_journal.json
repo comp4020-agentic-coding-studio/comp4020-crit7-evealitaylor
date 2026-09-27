@@ -43,6 +43,13 @@
       "when": 1790504587118,
       "tag": "0005_recorded_lectures",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790505018081,
+      "tag": "0006_drop_skip_lectures",
+      "breakpoints": true
     }
   ]
 }
