@@ -2,25 +2,29 @@
 
 ## What was the breakthrough that moved the work forward?
 
-The breakthrough was taking the brief's line "model the slice that annoys
-you" literally. At first I treated the redesign as a reskin: make it look
-more like Web Publisher, then less like it. That kept me going back and
-forth on style without making planning any easier. Once I asked what would
-actually help me fit my subjects into fewer days, the work had a direction:
-keeping days free, letting single-class lectures fill themselves in, and a
-suggester that finds the fewest-days plan for me. Even the smaller fixes,
-like recording a lecture only when it lands on a free day, came from asking
-"what would I do with this on enrolment night?" rather than "what does the
-original have?"
+The breakthrough came from the design. At first I used the original Web
+Publisher's exact styling, with the new pinning feature dropped into it,
+because that was how I first read the brief: redesign one feature, and
+leave the rest of the system as it is. Once it was built, it was clear that
+the old look worked against the feature. The panels were cramped, the
+colours and banners competed with the parts that mattered, and it felt
+dated for the students who would actually use it. So I expanded the
+design: I kept the elements that make it recognisably ANU's tool, and
+redesigned the page around planning, with more space, clearer states for
+pinned and suggested classes, and a cleaner, more modern look that suits a
+younger student body. That change opened the door to the planning features,
+because the page finally had room for them.
 
 ## What did this work change about who I want to be as a software developer?
 
-I spent most of this week reviewing and correcting, not writing code. The
-agent built what I asked for quickly, but it often overshot: too close to
-the original's look, or a global setting where I needed a per-lecture one.
-My useful work was noticing that and saying precisely what I meant. Writing
-those corrections into `CLAUDE.md` as rules made them stick, so I didn't
-have to repeat myself. I want to be the kind of developer who knows what
-good looks like for the people using the thing, and can hold a fast
-collaborator to it, rather than one who just accepts the first version
-that works.
+It showed me that my first interpretation of a brief can lead me astray. I
+read "redesign one feature" as "change as little as possible", and I built
+that faithfully before realising it wasn't what would make the tool better.
+The same happened on a smaller scale with the lecture setting: my first
+idea, one switch for all lectures, only showed its flaws once I used it,
+and the per-lecture checkbox came out of that. I don't think I could have
+reasoned my way straight to the final version. It took building something,
+looking at it honestly, and changing course. I want to be a developer who
+treats a first version as an experiment rather than a commitment, and who
+is willing to move away from an early reading of the problem once the work
+shows a better one.
