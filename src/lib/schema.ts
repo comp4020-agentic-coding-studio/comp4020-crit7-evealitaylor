@@ -83,6 +83,21 @@ export const pins = sqliteTable(
   (t) => [primaryKey({ columns: [t.studentId, t.activityId] })],
 );
 
+// Lectures the student will watch as a recording instead of attending. Only
+// counts while the lecture falls on a day they want free (see timetable.ts).
+export const recordedLectures = sqliteTable(
+  "recorded_lectures",
+  {
+    studentId: text("student_id")
+      .notNull()
+      .references(() => students.id),
+    activityId: int("activity_id")
+      .notNull()
+      .references(() => activities.id),
+  },
+  (t) => [primaryKey({ columns: [t.studentId, t.activityId] })],
+);
+
 export type Subject = typeof subjects.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
 export type ClassOption = typeof classOptions.$inferSelect;

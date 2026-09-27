@@ -36,6 +36,13 @@
       "when": 1790503848276,
       "tag": "0004_skip_lectures",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790504587118,
+      "tag": "0005_recorded_lectures",
+      "breakpoints": true
     }
   ]
 }
