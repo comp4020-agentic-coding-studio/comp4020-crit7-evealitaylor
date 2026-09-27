@@ -60,8 +60,9 @@ because I try to fit my subjects into as few days as possible.
 
 ## Process and reflection writing
 
-- `PROCESS.md` is flowing prose, not bullet points. Quote my own prompts,
-  and give each feature its context and the reason for the choice.
+- `PROCESS.md` is flowing prose, not bullet points, written as if I wrote
+  it: first person, no quoted prompts. Give each feature its context and
+  the reason for the choice, within the 150–300 word crit-week guide.
 - `PROCESS.md` covers the process as it relates to the final outcome. Don't
   write about this file, or about how I instruct or work with the agent.
 - The reflection is in my voice and says what I actually think; draft it
